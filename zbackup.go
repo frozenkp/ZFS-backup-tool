@@ -48,7 +48,7 @@ func main(){
   cmdin:=cmd{"create","",0,20,timeModify(time.Now())}
   args:=flag.Args()
   var args1 int = 0
-
+  fmt.Println(cmdin)
   //set cmd
   if len(args)>0{
     cmdin.target_dataset=args[0]
@@ -64,7 +64,9 @@ func main(){
       cmdin.id=args1
     }else{
       cmdin.mode="create"
-      cmdin.rotation=args1
+      if args1!=0 {
+        cmdin.rotation=args1
+      }
     }
   }else{
     if *list {
@@ -75,6 +77,7 @@ func main(){
   }
 
   //process
+  fmt.Println(cmdin)
   cmdin.process()
 }
 
