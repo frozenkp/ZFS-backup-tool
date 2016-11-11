@@ -43,8 +43,6 @@ a tool to manage zfs snapshots easily
 --------------
 you should execute "create" and "delete" with sudo.
 
-
-----------
 **Install**
 --------------
 you can download the latest release [here](https://github.com/FrozenKP/ZFS-backup-tool/releases).
