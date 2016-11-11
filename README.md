@@ -1,2 +1,2 @@
 # ZFS-backup-tool
-a tool to backup zfs snapshots easily
+a tool to manage zfs snapshots easily
