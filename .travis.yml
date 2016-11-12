@@ -1,0 +1,11 @@
+language: go
+
+go:
+  -1.6
+
+notifications:
+  email:
+    recipients:
+      - csjh21010@gmail.com
+    on_success: always
+    on_failure: always
