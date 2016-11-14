@@ -84,7 +84,7 @@ func timeModify(t time.Time)string{
   TimeStr:=fmt.Sprintln(t)
   StrSpl:=strings.Split(TimeStr," ")
   StrSpltime:=strings.Split(StrSpl[1],".")
-  return StrSpl[0]+"_"+StrSpltime[0]
+  return StrSpl[0]+"_"+StrSpltime[0]+"_"+StrSpltime[1]
 }
 
 func (cmdin cmd) process(){
