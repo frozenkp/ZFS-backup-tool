@@ -49,7 +49,7 @@ func main(){
   //help page
   if(*help==true){
     fmt.Println("This is a tool to manage zfs snapshots")
-    fmt.Println("Command: zbackup ( target_dataset [rotation_count] | --list [target_dataset [ID]] | --delete [target_dataset [ID]] )")
+    fmt.Println("Command: zbackup ( target_dataset [rotation_count] | --list [target_dataset [ID]] | --delete [target_dataset [ID]] | --daemon [--config /path/to/your/conf])")
     fmt.Println("")
     fmt.Println("Create\tzbackup target_dataset [rotation_count]")
     fmt.Println("\tcreate a snapshot for target_dataset with rotation_count")
@@ -61,6 +61,10 @@ func main(){
     fmt.Println("")
     fmt.Println("Delete\tzbackup --delete [target_dataset [ID]]")
     fmt.Println("\tdelete snapshots")
+    fmt.Println("")
+    fmt.Println("Daemon\tzbackup --daemon [--config /path/to/your/conf]")
+    fmt.Println("\tBackup automatically background.")
+    fmt.Println("\tYou can use custom conf path with \"--config path/to/your/conf\",or zbackup will use /usr/local/etc/zbackup.conf in default.")
     fmt.Println("")
     fmt.Println("Help\tzbackup --help")
     return
