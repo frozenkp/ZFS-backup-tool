@@ -3,8 +3,6 @@
 # **ZFS-backup-tool**
 a tool to manage zfs snapshots easily
 
-
-----------
 # **Command**
     zbackup ( target_dataset [rotation_count] | --list [target_dataset [ID]] | --delete [target_dataset [ID]] | --daemon [--config path/to/your/conf])
 
