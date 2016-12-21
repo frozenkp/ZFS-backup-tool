@@ -4,17 +4,33 @@ import(
   "strings"
   "fmt"
   "os/exec"
+  "bufio"
   "flag"
   "strconv"
   "time"
+  "github.com/jasonlvhit/gocron"
+  "io"
+  "log"
+  "os"
+  "os/signal"
+  "syscall"
 )
 
 type cmd struct{
-  mode            string          //create(default) , list , delete
+  mode            string          //create(default) , list , delete , daemonHandle , daemon
   target_dataset  string
   id              int             //0(default)
   rotation        int             //20(default)
   time            string
+  config          string          // /usr/local/etc/zbackup.conf (default)
+}
+
+type schedule struct{
+  dataset   string
+  rotation  int
+  mode      string        // m: minutes, h: hours, d: days, w: weeks
+  interval  int
+  enable    bool
 }
 
 func main(){
@@ -22,6 +38,11 @@ func main(){
   list:=flag.Bool("list",false,"flag of list")
   del:=flag.Bool("delete",false,"flag of del")
   help:=flag.Bool("help",false,"flag of help")
+  daemon:=flag.Bool("daemon",false,"flag of daemonHandle")
+  d:=flag.Bool("d",false,"flag of daemon(d)")
+  config:=flag.String("config","","flag of config")
+  c:=flag.String("c","","flag of config(c)")
+  t:=flag.Bool("t",false,"flag of daemon")
 
   flag.Parse()
 
@@ -45,12 +66,24 @@ func main(){
     return
   }
 
-  cmdin:=cmd{"create","",0,20,timeModify(time.Now())}
+  cmdin:=cmd{"create","",0,20,timeModify(time.Now()),"/usr/local/etc/zbackup.conf"}
   args:=flag.Args()
   var args1 int = 0
 
   //set cmd
-  if len(args)>0{
+  if *t {
+    cmdin.mode="daemon"
+    if *c!=""{
+      cmdin.config=*c
+    }
+  }else if *d||*daemon {
+    cmdin.mode="daemonHandle"
+    if *c!=""{
+      cmdin.config=*c
+    }else if *config!=""{
+      cmdin.config=*config
+    }
+  }else if len(args)>0{
     cmdin.target_dataset=args[0]
     if len(args)>1 {
       args1,_=strconv.Atoi(args[1])
@@ -89,12 +122,16 @@ func timeModify(t time.Time)string{
 
 func (cmdin cmd) process(){
   switch cmdin.mode {
-    case "create":
-      cmdin.create()
-    case "list":
-      cmdin.list()
-    case "delete":
-      cmdin.del()
+  case "create":
+    cmdin.create()
+  case "list":
+    cmdin.list()
+  case "delete":
+    cmdin.del()
+  case "daemonHandle":
+    cmdin.daemonHandle()
+  case "daemon":
+    cmdin.daemon()
   }
 }
 
@@ -216,3 +253,114 @@ func (cmdin cmd) del(){
   }
 }
 
+//start dameon
+func (cmdin cmd) daemonHandle(){
+  if !exist(cmdin.config) {
+    log.Printf("no such config file\n")
+    return
+  }
+  cmd := exec.Command("zbackup","-t","-c",cmdin.config)
+  cmd.Stdout = os.Stdout
+  err := cmd.Start()
+  if err != nil {
+    log.Fatal(err)
+  }
+  log.Printf("pid: %d\n", cmd.Process.Pid)
+}
+
+//daemon
+//dataset rotation mode interval enable
+func (cmdin cmd) daemon(){
+  //process
+  for true{
+    //check file valid
+    if !exist(cmdin.config) {
+      return
+    }
+    //schedule list
+    f,_:=os.Open(cmdin.config)
+    defer f.Close()
+    fbuf:=bufio.NewReader(f)
+    schS:=make([]schedule,0)
+    var sch schedule
+    var exe bool=true
+    var newone bool
+    for exe {
+      sch.enable=true
+      newone=true
+      for true{
+        p,err:=fbuf.Peek(1)
+        if err==io.EOF{
+          exe=false
+          break
+        }
+        if p[0]=='[' {
+          if newone{
+            newone=false
+            l,_,_:=fbuf.ReadLine()
+            sch.dataset=strings.TrimRight(strings.TrimLeft(strings.Split(string(l),"]")[0], "[ "), " ")
+          }else{
+            break
+          }
+        }else if p[0]=='e'{
+          l,_,_:=fbuf.ReadLine()
+          en:=strings.Split(strings.TrimRight(strings.Split(string(l),"#")[0], " \r\n"), "=")[1]
+          if en=="no"{
+            sch.enable=false
+          }
+        }else if p[0]=='p'{
+          l,_,_:=fbuf.ReadLine()
+          stmp:=strings.Split(strings.TrimRight(strings.Split(string(l),"#")[0], " \r\n"), "=")[1]
+          sch.mode=string(stmp[len(stmp)-1])
+          sch.rotation,_=strconv.Atoi(strings.Split(stmp[:len(stmp)-1],"x")[0])
+          sch.interval,_=strconv.Atoi(strings.Split(stmp[:len(stmp)-1],"x")[1])
+        }else{
+          fbuf.ReadLine()
+        }
+      }
+      if sch.enable {
+        schS=append(schS,sch)
+      }
+    }
+    //add schedule
+    cron := gocron.NewScheduler()
+    for a:=0;a<len(schS);a++ {
+      switch schS[a].mode{
+      case "m":
+        cron.Every(uint64(schS[a].interval)).Minutes().Do(schS[a].task)
+      case "h":
+        cron.Every(uint64(schS[a].interval)).Hours().Do(schS[a].task)
+      case "d":
+        cron.Every(uint64(schS[a].interval)).Days().Do(schS[a].task)
+      case "w":
+        cron.Every(uint64(schS[a].interval)).Weeks().Do(schS[a].task)
+      }
+    }
+    crch:=cron.Start()
+    //reload
+    c:=make(chan os.Signal,1)
+    signal.Notify(c,syscall.SIGHUP)
+    go func(){
+      for range c {
+        cron.Clear()
+        close(crch)
+        return
+      }
+    }()
+    <-crch
+  }
+}
+
+func (sch schedule) task(){
+  cmdin:=cmd{"create",sch.dataset,0,sch.rotation,timeModify(time.Now()),""}
+  cmdin.create()
+}
+
+func exist(path string)bool{
+  _,err:=os.Stat(path)
+  if err == nil {
+    return true
+  }else{
+    return false
+  }
+}
